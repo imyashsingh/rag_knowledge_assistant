@@ -1,0 +1,132 @@
+from app.api.rate_limiter import RateLimitMiddleware
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from contextlib import asynccontextmanager
+import logging
+import time
+
+from app.api.v1.router import api_router
+from app.api.middleware import log_requests, jwt_auth_middleware
+from app.db.base import Base
+from app.db.session import engine
+from app.core.redis_client import test_redis_connection
+from app.core.exceptions import setup_exception_handlers
+from app.config import settings
+
+# Configure logging
+from app.utils.logger import setup_logging, configure_request_logging, get_logger
+
+setup_logging(
+    log_level=os.getenv("LOG_LEVEL", "INFO"),
+    log_file=os.getenv(
+        "LOG_FILE", "logs/documind.log") if os.getenv("ENVIRONMENT") == "production" else None,
+    enable_structured=os.getenv(
+        "STRUCTURED_LOGGING", "true").lower() == "true",
+    enable_file_rotation=True
+)
+
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    # Startup
+    logger.info("Starting DocuMind API...")
+
+    # Test Redis connection
+    try:
+        redis_healthy = test_redis_connection()
+        if redis_healthy:
+            logger.info("Redis connection successful")
+        else:
+            logger.warning(
+                "Redis connection failed - caching will be disabled")
+    except Exception as e:
+        logger.warning(f"Redis connection test failed: {str(e)}")
+
+    # Create database tables
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Database table creation failed: {str(e)}")
+        raise
+
+    # Setup pgvector extension and indexes
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+                ON chunks USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 100)
+            """))
+            conn.commit()
+        logger.info("pgvector extension and indexes setup complete")
+    except Exception as e:
+        logger.error(f"pgvector setup failed: {str(e)}")
+        raise
+
+    logger.info("DocuMind API startup complete")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down DocuMind API...")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="DocuMind",
+    description="Production-ready RAG Knowledge Assistant API",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add custom middleware
+app.middleware("http")(configure_request_logging())
+app.middleware("http")(jwt_auth_middleware)
+
+# Add rate limiting middleware
+app.add_middleware(RateLimitMiddleware, default_limit=100, default_window=60)
+
+# Setup exception handlers
+setup_exception_handlers(app)
+
+# Include API router
+app.include_router(api_router, prefix="/api/v1")
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "DocuMind API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/api/v1/health"
+    }
+
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    """Add processing time header to responses"""
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
