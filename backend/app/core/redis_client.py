@@ -7,6 +7,9 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Redis connection with connection pooling and error handling
+# Handle Upstash Redis URL format
+
+# Standard Redis format
 redis_client = redis.Redis(
     host=settings.REDIS_HOST,
     port=6379,

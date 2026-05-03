@@ -8,8 +8,8 @@ import time
 logger = logging.getLogger(__name__)
 
 
-class DocuMindException(Exception):
-    """Base exception for DocuMind application"""
+class RAGKnowledgeAssistantException(Exception):
+    """Base exception for RAG Knowledge Assistant application"""
 
     def __init__(self, message: str, error_code: str = None):
         self.message = message
@@ -17,44 +17,44 @@ class DocuMindException(Exception):
         super().__init__(self.message)
 
 
-class DatabaseException(DocuMindException):
+class DatabaseException(RAGKnowledgeAssistantException):
     """Database related exceptions"""
     pass
 
 
-class RedisException(DocuMindException):
+class RedisException(RAGKnowledgeAssistantException):
     """Redis related exceptions"""
     pass
 
 
-class EmbeddingException(DocuMindException):
+class EmbeddingException(RAGKnowledgeAssistantException):
     """Embedding generation exceptions"""
     pass
 
 
-class RAGException(DocuMindException):
+class RAGException(RAGKnowledgeAssistantException):
     """RAG pipeline exceptions"""
     pass
 
 
-class AuthenticationException(DocuMindException):
+class AuthenticationException(RAGKnowledgeAssistantException):
     """Authentication related exceptions"""
     pass
 
 
-class DocumentProcessingException(DocuMindException):
+class DocumentProcessingException(RAGKnowledgeAssistantException):
     """Document processing exceptions"""
     pass
 
 
-class ValidationException(DocuMindException):
+class ValidationException(RAGKnowledgeAssistantException):
     """Validation exceptions"""
     pass
 
 
-async def documind_exception_handler(request: Request, exc: DocuMindException):
-    """Handler for custom DocuMind exceptions"""
-    logger.error(f"DocuMind exception: {exc.message}")
+async def rag_knowledge_assistant_exception_handler(request: Request, exc: RAGKnowledgeAssistantException):
+    """Handler for custom RAG Knowledge Assistant exceptions"""
+    logger.error(f"RAG Knowledge Assistant exception: {exc.message}")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -108,7 +108,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 def setup_exception_handlers(app: FastAPI):
     """Setup all exception handlers for the FastAPI app"""
-    app.add_exception_handler(DocuMindException, documind_exception_handler)
+    app.add_exception_handler(
+        RAGKnowledgeAssistantException, rag_knowledge_assistant_exception_handler)
     app.add_exception_handler(RequestValidationError,
                               validation_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)

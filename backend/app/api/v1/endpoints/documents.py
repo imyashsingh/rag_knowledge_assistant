@@ -3,11 +3,10 @@ import tempfile
 from pathlib import Path
 from typing import List
 from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.ingestion.processor import DocumentProcessor
 from app.services.document_service import process_document_upload
-from app.schemas.document import DocumentResponse, DocumentCreate
+from app.schemas.document import DocumentResponse
 from app.api.deps import get_current_user, get_current_workspace_id, get_current_user_id
 from app.db.repositories.document_repo import DocumentRepository
 from app.db.session import get_db

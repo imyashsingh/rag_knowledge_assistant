@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException, status
 from datetime import datetime
+from sqlalchemy import text
 from app.core.redis_client import RedisCache, test_redis_connection
 from app.db.session import engine
 from app.rag.llm import validate_api_key
+from app.rag.embeddings import validate_embedding_model
 from app.ingestion.processor import DocumentProcessor
 
 router = APIRouter()
@@ -22,7 +24,7 @@ def health_check():
         # Database health check
         try:
             with engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
                 health_status["components"]["database"] = {
                     "status": "healthy",
                     "message": "Database connection successful"
@@ -73,6 +75,27 @@ def health_check():
             health_status["components"]["groq"] = {
                 "status": "unhealthy",
                 "message": f"Groq API check failed: {str(e)}"
+            }
+            health_status["status"] = "degraded"
+
+        # Embedding model health check
+        try:
+            embedding_healthy = validate_embedding_model()
+            if embedding_healthy:
+                health_status["components"]["embeddings"] = {
+                    "status": "healthy",
+                    "message": "Sentence transformer model loaded successfully"
+                }
+            else:
+                health_status["components"]["embeddings"] = {
+                    "status": "unhealthy",
+                    "message": "Embedding model failed to load"
+                }
+                health_status["status"] = "degraded"
+        except Exception as e:
+            health_status["components"]["embeddings"] = {
+                "status": "unhealthy",
+                "message": f"Embedding model check failed: {str(e)}"
             }
             health_status["status"] = "degraded"
 
@@ -128,11 +151,12 @@ def readiness_check():
         # Check critical components
         redis_healthy = test_redis_connection()
         groq_healthy = validate_api_key()
+        embedding_healthy = validate_embedding_model()
 
-        if redis_healthy and groq_healthy:
+        if redis_healthy and groq_healthy and embedding_healthy:
             return {"status": "ready"}
         else:
-            return {"status": "not_ready", "redis": redis_healthy, "groq": groq_healthy}
+            return {"status": "not_ready", "redis": redis_healthy, "groq": groq_healthy, "embeddings": embedding_healthy}
 
     except Exception as e:
         return {"status": "not_ready", "error": str(e)}

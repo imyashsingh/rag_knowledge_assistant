@@ -4,7 +4,7 @@ from app.db.models.user import User
 from app.db.models.workspace import Workspace
 from app.db.repositories.user_repo import UserRepository
 from app.db.repositories.workspace_repo import WorkspaceRepository
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, verify_refresh_token
 from app.core.token_store import store_refresh_token, get_refresh_token, delete_refresh_token
 from app.schemas.user import UserCreate, UserLogin
 from app.schemas.auth import TokenResponse
@@ -30,6 +30,7 @@ def register_user(user_data: UserCreate, db: Session) -> TokenResponse:
         # Create user
         user = user_repo.create_user(
             email=user_data.email,
+            name=user_data.name,
             password=hash_password(user_data.password),
             workspace_id=workspace.id
         )

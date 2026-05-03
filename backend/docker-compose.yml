@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DB_URL=postgresql://postgres:password@db:5432/documind
+      - DB_URL=postgresql://postgres:password@db:5432/rag_knowledge_assistant
       - REDIS_HOST=redis
       - REDIS_PASSWORD=redispassword
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
@@ -21,7 +21,7 @@ services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      - POSTGRES_DB=documind
+      - POSTGRES_DB=rag_knowledge_assistant
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
     ports:

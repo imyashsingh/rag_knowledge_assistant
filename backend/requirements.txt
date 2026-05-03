@@ -8,9 +8,12 @@ sqlalchemy==2.0.23
 alembic==1.18.4
 psycopg2-binary==2.9.9
 
-# Vector Database and Embeddings (Lightweight)
+# Vector Database and Embeddings
 pgvector==0.4.2
 numpy==1.24.4
+sentence-transformers==2.2.2
+torch>=2.0.0
+Pillow>=9.0.0
 
 # Redis
 redis==5.0.1
@@ -18,6 +21,7 @@ redis==5.0.1
 # Authentication and Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 
 # LLM Integration
 openai>=1.30.0

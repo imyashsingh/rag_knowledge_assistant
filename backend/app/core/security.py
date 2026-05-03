@@ -1,9 +1,13 @@
+import warnings
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from app.config import settings
 
-pwd = CryptContext(schemes=["bcrypt"])
+# Suppress bcrypt version warning
+warnings.filterwarnings("ignore", message=".*bcrypt version.*")
+
+pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:

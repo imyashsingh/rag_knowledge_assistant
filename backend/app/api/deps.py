@@ -1,7 +1,9 @@
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError
+from sqlalchemy.orm import Session
 from app.core.security import verify_access_token
+from app.db.session import get_db
 
 security = HTTPBearer()
 
@@ -39,13 +41,3 @@ def get_current_user_id(current_user: dict = Depends(get_current_user)):
             detail="User ID not found in token"
         )
     return user_id
-
-
-# Backward compatibility
-def get_user(token=Depends(security)):
-    """Legacy function - use get_current_user instead"""
-    try:
-        from app.core.security import decode_token
-        return decode_token(token.credentials)
-    except:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")

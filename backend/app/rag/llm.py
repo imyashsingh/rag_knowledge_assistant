@@ -1,7 +1,6 @@
 from typing import Optional, Dict, Any
 from openai import OpenAI
 from app.config import settings
-import json
 
 client = OpenAI(
     api_key=settings.GROQ_API_KEY,
@@ -11,7 +10,7 @@ client = OpenAI(
 
 def generate_response(
     prompt: str,
-    model: str = "llama3-8b-8192",
+    model: str = "llama-3.1-8b-instant",
     temperature: float = 0.7,
     max_tokens: int = 1000
 ) -> Optional[str]:
@@ -74,7 +73,7 @@ Answer:"""
 def generate_chat_response(
     query: str,
     context_chunks: list[str],
-    model: str = "llama3-8b-8192"
+    model: str = "llama-3.1-8b-instant"
 ) -> Optional[str]:
     """
     Generate response for RAG chat
@@ -94,10 +93,11 @@ def generate_chat_response(
 def get_available_models() -> list[str]:
     """Get list of available Groq models"""
     return [
-        "llama3-8b-8192",
-        "llama3-70b-8192",
+        "llama-3.1-8b-instant",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-405b-reasoning",
         "mixtral-8x7b-32768",
-        "gemma-7b-it"
+        "gemma2-9b-it"
     ]
 
 
@@ -105,7 +105,7 @@ def validate_api_key() -> bool:
     """Check if Groq API key is valid"""
     try:
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": "test"}],
             max_tokens=1
         )

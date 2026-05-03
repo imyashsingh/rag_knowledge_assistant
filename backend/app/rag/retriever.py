@@ -22,20 +22,23 @@ def search_similar_chunks(
     try:
         query_embedding = generate_embedding(query)
 
+        # Convert embedding to string for PostgreSQL
+        embedding_str = str(query_embedding)
+
         # Vector search with pgvector
         results = db.execute(text("""
             SELECT 
                 c.text,
                 c.document_id,
                 d.title as document_title,
-                1 - (c.embedding <-> :query_embedding::vector) as similarity
+                1 - (c.embedding <=> :query_embedding) as similarity
             FROM chunks c
             JOIN documents d ON c.document_id = d.id
             WHERE c.workspace_id = :workspace_id
-            ORDER BY c.embedding <-> :query_embedding::vector
+            ORDER BY c.embedding <=> :query_embedding
             LIMIT :limit
         """), {
-            "query_embedding": query_embedding,
+            "query_embedding": embedding_str,
             "workspace_id": workspace_id,
             "limit": limit * 2 if rerank else limit  # Get more for reranking
         }).fetchall()

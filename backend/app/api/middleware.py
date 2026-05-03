@@ -1,13 +1,10 @@
 from fastapi import Request, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError
 from app.core.security import verify_access_token
 import time
 import logging
 
 logger = logging.getLogger(__name__)
-
-security = HTTPBearer()
 
 
 async def log_requests(request: Request, call_next):
@@ -29,8 +26,8 @@ async def log_requests(request: Request, call_next):
 async def jwt_auth_middleware(request: Request, call_next):
     """JWT Authentication Middleware"""
     # Skip auth for certain paths
-    skip_paths = ["/api/v1/register", "/api/v1/login",
-                  "/api/v1/health", "/docs", "/redoc"]
+    skip_paths = ["/", "/api/v1/auth/register", "/api/v1/auth/login",
+                  "/api/v1/health", "/docs", "/redoc", "/openapi.json"]
     if any(request.url.path.startswith(path) for path in skip_paths):
         return await call_next(request)
 

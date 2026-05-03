@@ -8,6 +8,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
+    name: str
     password: str
     workspace_name: Optional[str] = "Default Workspace"
 
@@ -20,6 +21,6 @@ class UserResponse(UserBase):
     id: int
     workspace_id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True

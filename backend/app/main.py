@@ -1,10 +1,9 @@
+import os
 from app.api.rate_limiter import RateLimitMiddleware
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from contextlib import asynccontextmanager
-import logging
 import time
 
 from app.api.v1.router import api_router
@@ -16,25 +15,21 @@ from app.core.exceptions import setup_exception_handlers
 from app.config import settings
 
 # Configure logging
-from app.utils.logger import setup_logging, configure_request_logging, get_logger
+import logging
 
-setup_logging(
-    log_level=os.getenv("LOG_LEVEL", "INFO"),
-    log_file=os.getenv(
-        "LOG_FILE", "logs/documind.log") if os.getenv("ENVIRONMENT") == "production" else None,
-    enable_structured=os.getenv(
-        "STRUCTURED_LOGGING", "true").lower() == "true",
-    enable_file_rotation=True
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
-    logger.info("Starting DocuMind API...")
+    logger.info("Starting RAG Knowledge Assistant API...")
 
     # Test Redis connection
     try:
@@ -70,18 +65,18 @@ async def lifespan(app: FastAPI):
         logger.error(f"pgvector setup failed: {str(e)}")
         raise
 
-    logger.info("DocuMind API startup complete")
+    logger.info("RAG Knowledge Assistant API startup complete")
 
     yield
 
     # Shutdown
-    logger.info("Shutting down DocuMind API...")
+    logger.info("Shutting down RAG Knowledge Assistant API...")
 
 
 # Create FastAPI app
 app = FastAPI(
-    title="DocuMind",
-    description="Production-ready RAG Knowledge Assistant API",
+    title="RAG Knowledge Assistant",
+    description="RAG Knowledge Assistant API",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -97,9 +92,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add custom middleware
-app.middleware("http")(configure_request_logging())
-app.middleware("http")(jwt_auth_middleware)
+# Include API router FIRST (before JWT middleware)
+app.include_router(api_router, prefix="/api/v1")
 
 # Add rate limiting middleware
 app.add_middleware(RateLimitMiddleware, default_limit=100, default_window=60)
@@ -107,15 +101,15 @@ app.add_middleware(RateLimitMiddleware, default_limit=100, default_window=60)
 # Setup exception handlers
 setup_exception_handlers(app)
 
-# Include API router
-app.include_router(api_router, prefix="/api/v1")
+# Add custom middleware AFTER router inclusion
+app.middleware("http")(jwt_auth_middleware)
 
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
-        "message": "DocuMind API",
+        "message": "RAG Knowledge Assistant API",
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/api/v1/health"

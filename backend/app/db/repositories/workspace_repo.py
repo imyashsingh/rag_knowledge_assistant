@@ -14,6 +14,10 @@ class WorkspaceRepository(BaseRepository[Workspace]):
     def create_workspace(self, name: str) -> Workspace:
         return self.create(name=name)
 
+    def get_all(self) -> List[Workspace]:
+        """Get all workspaces"""
+        return self.get_multi()
+
     def get_with_users(self, workspace_id: int) -> Optional[Workspace]:
         return (
             self.db_session.query(Workspace)

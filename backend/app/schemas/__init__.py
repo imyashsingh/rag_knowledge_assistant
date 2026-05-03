@@ -1,13 +1,13 @@
-from app.schemas.user import UserCreate, UserResponse, UserLogin
 from app.schemas.auth import TokenResponse, RefreshTokenRequest
-from app.schemas.document import DocumentCreate, DocumentResponse
-from app.schemas.chat import ChatRequest, ChatResponse
-from app.schemas.common import ErrorResponse, SuccessResponse
+from app.schemas.chat import ChatRequest, ChatResponse, SourceDocument
+from app.schemas.document import DocumentResponse
+from app.schemas.user import UserCreate, UserLogin, UserResponse
+from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceUpdate, WorkspaceWithUsers, WorkspaceStats
 
 __all__ = [
     "UserCreate", "UserResponse", "UserLogin",
     "TokenResponse", "RefreshTokenRequest",
-    "DocumentCreate", "DocumentResponse",
-    "ChatRequest", "ChatResponse",
-    "ErrorResponse", "SuccessResponse"
+    "DocumentResponse",
+    "ChatRequest", "ChatResponse", "SourceDocument",
+    "WorkspaceCreate", "WorkspaceResponse", "WorkspaceUpdate", "WorkspaceWithUsers", "WorkspaceStats"
 ]
