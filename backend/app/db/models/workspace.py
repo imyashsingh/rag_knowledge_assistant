@@ -16,4 +16,5 @@ class Workspace(Base):
         "Document", back_populates="workspace", cascade="all, delete-orphan")
     chunks = relationship("Chunk", back_populates="workspace",
                           cascade="all, delete-orphan")
-    chat_history = relationship("ChatHistory", back_populates="workspace")
+    chat_history = relationship("ChatHistory", back_populates="workspace",
+                                cascade="all, delete")

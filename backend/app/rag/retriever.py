@@ -25,7 +25,7 @@ def search_similar_chunks(
         # Convert embedding to string for PostgreSQL
         embedding_str = str(query_embedding)
 
-        # Vector search with pgvector
+        # Enhanced vector search with pgvector
         results = db.execute(text("""
             SELECT 
                 c.text,
@@ -65,20 +65,35 @@ def _rerank_results(
     results: List[Tuple[str, int, str, float]]
 ) -> List[Tuple[str, int, str, float]]:
     """
-    Simple reranking based on keyword overlap and semantic similarity
+    Enhanced reranking based on keyword overlap, semantic similarity, and position relevance
     """
     query_words = set(query.lower().split())
 
     reranked = []
-    for chunk_text, document_id, document_title, similarity in results:
+    for idx, (chunk_text, document_id, document_title, similarity) in enumerate(results):
         chunk_words = set(chunk_text.lower().split())
 
-        # Keyword overlap score
+        # Keyword overlap score (40%)
         keyword_overlap = len(query_words & chunk_words) / \
-            len(query_words | chunk_words)
+            len(query_words | chunk_words) if query_words else 0
 
-        # Combined score (70% semantic, 30% keyword)
-        combined_score = 0.7 * similarity + 0.3 * keyword_overlap
+        # Position boost (earlier chunks get slight boost)
+        position_boost = 1.0 - (idx * 0.05)  # 5% boost for first position
+
+        # Length penalty (very short or very long chunks penalized)
+        chunk_length = len(chunk_text.split())
+        length_penalty = 1.0
+        if chunk_length < 20:  # Too short
+            length_penalty = 0.8
+        elif chunk_length > 500:  # Too long
+            length_penalty = 0.9
+
+        # Combined score (50% semantic, 40% keyword, 10% position)
+        combined_score = (
+            0.5 * similarity +
+            0.4 * keyword_overlap +
+            0.1 * position_boost
+        ) * length_penalty
 
         reranked.append(
             (chunk_text, document_id, document_title, combined_score))

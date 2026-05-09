@@ -12,7 +12,8 @@ def handle_chat_query(
     user_id: int,
     max_sources: int = 5,
     db: Session = None,
-    session_id: str = None
+    session_id: str = None,
+    conversation_history: list = None
 ) -> Optional[ChatResponse]:
     """
     Handle chat query using RAG pipeline with history persistence
@@ -37,7 +38,8 @@ def handle_chat_query(
             workspace_id=workspace_id,
             user_id=user_id,
             max_sources=max_sources,
-            db=db
+            db=db,
+            conversation_history=conversation_history
         )
 
         # Save chat history if database session is provided

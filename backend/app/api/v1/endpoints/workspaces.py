@@ -22,12 +22,16 @@ def create_workspace(
     try:
         workspace_repo = WorkspaceRepository(db)
 
-        # Check if workspace name already exists for this user
+        # Check if workspace name already exists
         existing_workspace = workspace_repo.get_by_name(workspace_data.name)
         if existing_workspace:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Workspace with this name already exists"
+                detail={
+                    "error": "WORKSPACE_EXISTS",
+                    "message": f"Workspace with name '{workspace_data.name}' already exists",
+                    "field": "name"
+                }
             )
 
         # Create workspace
@@ -44,7 +48,11 @@ def create_workspace(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create workspace: {str(e)}"
+            detail={
+                "error": "WORKSPACE_CREATE_FAILED",
+                "message": "Failed to create workspace",
+                "details": str(e)
+            }
         )
 
 
@@ -54,37 +62,56 @@ def list_user_workspaces(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """List all workspaces for the current user"""
+    """List all workspaces (so users can switch between them)"""
     try:
         workspace_repo = WorkspaceRepository(db)
         user_repo = UserRepository(db)
 
-        # Get user's workspaces
+        # Verify user exists
         user = user_repo.get_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                detail={
+                    "error": "USER_NOT_FOUND",
+                    "message": "User not found",
+                    "field": "user_id"
+                }
             )
 
-        # For now, return the user's current workspace
-        # In a full implementation, you'd have a user_workspaces join table
-        current_workspace = workspace_repo.get_by_id(user.workspace_id)
-        if current_workspace:
+        # Return ALL workspaces so users can see and switch to any of them
+        all_workspaces = workspace_repo.get_multi()
+
+        if not all_workspaces:
+            # If no workspaces exist, create a default one for the user
+            default_workspace = workspace_repo.create_workspace("My Workspace")
+            user_repo.update(user.id, workspace_id=default_workspace.id)
             return [WorkspaceResponse(
-                id=current_workspace.id,
-                name=current_workspace.name,
-                created_at=current_workspace.created_at
+                id=default_workspace.id,
+                name=default_workspace.name,
+                created_at=default_workspace.created_at
             )]
-        else:
-            return []
+
+        # One-time fix: handle workspaces with empty names
+        return [
+            WorkspaceResponse(
+                id=ws.id,
+                name=ws.name if ws.name and ws.name.strip() else "Default Workspace",
+                created_at=ws.created_at
+            )
+            for ws in all_workspaces
+        ]
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list workspaces: {str(e)}"
+            detail={
+                "error": "WORKSPACE_LIST_FAILED",
+                "message": "Failed to list workspaces",
+                "details": str(e)
+            }
         )
 
 
@@ -155,7 +182,11 @@ def update_workspace(
         if workspace_id != user_workspace_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this workspace"
+                detail={
+                    "error": "WORKSPACE_ACCESS_DENIED",
+                    "message": "You don't have permission to access this workspace",
+                    "field": "workspace_id"
+                }
             )
 
         workspace_repo = WorkspaceRepository(db)
@@ -171,7 +202,12 @@ def update_workspace(
         if existing_workspace and existing_workspace.id != workspace_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Workspace with this name already exists"
+                detail={
+                    "error": "WORKSPACE_NAME_CONFLICT",
+                    "message": f"Workspace with name '{workspace_data.name}' already exists",
+                    "field": "name",
+                    "existing_workspace_id": existing_workspace.id
+                }
             )
 
         workspace = workspace_repo.update(
@@ -194,7 +230,11 @@ def update_workspace(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update workspace: {str(e)}"
+            detail={
+                "error": "WORKSPACE_UPDATE_FAILED",
+                "message": "Failed to update workspace",
+                "details": str(e)
+            }
         )
 
 
@@ -211,7 +251,12 @@ def delete_workspace(
         if workspace_id == user_workspace_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete your current workspace"
+                detail={
+                    "error": "CANNOT_DELETE_CURRENT_WORKSPACE",
+                    "message": "Cannot delete your current workspace",
+                    "field": "workspace_id",
+                    "suggestion": "Switch to another workspace before deleting this one"
+                }
             )
 
         workspace_repo = WorkspaceRepository(db)

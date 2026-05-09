@@ -39,13 +39,14 @@ def generate_response(
         return None
 
 
-def build_rag_prompt(query: str, context_chunks: list[str]) -> str:
+def build_rag_prompt(query: str, context_chunks: list[str], conversation_history: list[dict] = None) -> str:
     """
     Build RAG prompt with context and query
 
     Args:
         query: User's question
         context_chunks: List of relevant text chunks
+        conversation_history: Optional list of previous messages in the conversation
 
     Returns:
         Formatted prompt for LLM
@@ -53,26 +54,52 @@ def build_rag_prompt(query: str, context_chunks: list[str]) -> str:
     context = "\n\n".join(
         [f"Context {i+1}:\n{chunk}" for i, chunk in enumerate(context_chunks)])
 
-    prompt = f"""You are a helpful AI assistant. Answer the user's question based on the provided context. If the context doesn't contain enough information to answer the question, say so politely.
+    # Build conversation history section if provided
+    conversation_section = ""
+    if conversation_history and len(conversation_history) > 0:
+        conversation_lines = []
+        for msg in conversation_history:
+            # Handle both Pydantic objects and dictionaries
+            if hasattr(msg, 'role'):
+                # It's a Pydantic object
+                role = "User" if msg.role == "user" else "Assistant"
+                content = msg.content if hasattr(msg, 'content') else ""
+            else:
+                # It's a dictionary
+                role = "User" if msg.get("role") == "user" else "Assistant"
+                content = msg.get("content", "")
+            conversation_lines.append(f"{role}: {content}")
+        conversation_text = "\n".join(conversation_lines)
+        conversation_section = f"CONVERSATION HISTORY:\n{conversation_text}\n"
 
+    prompt = f"""You are a helpful AI assistant that answers questions based primarily on document context, with awareness of conversation history.
+
+CONTEXT:
 {context}
 
-Question: {query}
+{conversation_section}
+USER QUESTION: {query}
 
-Instructions:
-1. Use only the provided context to answer the question
-2. If the context doesn't contain the answer, say "I don't have enough information to answer this question based on the provided context."
-3. Be concise and accurate
-4. If you use information from the context, cite the source by mentioning "according to the provided context"
+INSTRUCTIONS:
+1. First and foremost, answer based on the CONTEXT above. The document context is your primary source of information.
+2. Use the conversation history only to understand if this is a follow-up question or to maintain conversational flow.
+3. If the user asks for clarification or examples about something you already explained, provide additional examples from the context or explain differently.
+4. Provide a direct, accurate answer based primarily on the document context.
+5. Write in a natural, conversational style - avoid technical references like "Context 1", "Context 2", etc.
+6. If the context doesn't contain the answer, clearly state: "I don't have enough information to answer this question based on the available documents."
+7. Be concise but thorough - provide a complete answer in 2-4 sentences when possible.
+8. Do not make up information or use external knowledge.
+9. Focus on providing a helpful, easy-to-understand answer.
+10. Use simple, clear language that anyone can understand.
 
-Answer:"""
-
+ANSWER:"""
     return prompt
 
 
 def generate_chat_response(
     query: str,
     context_chunks: list[str],
+    conversation_history: list[dict] = None,
     model: str = "llama-3.1-8b-instant"
 ) -> Optional[str]:
     """
@@ -81,13 +108,14 @@ def generate_chat_response(
     Args:
         query: User's question
         context_chunks: List of relevant text chunks
+        conversation_history: Optional list of previous messages in the conversation
         model: LLM model to use
 
     Returns:
         Generated response or None if error
     """
-    prompt = build_rag_prompt(query, context_chunks)
-    return generate_response(prompt, model=model)
+    prompt = build_rag_prompt(query, context_chunks, conversation_history)
+    return generate_response(prompt, model=model, max_tokens=1500)
 
 
 def get_available_models() -> list[str]:

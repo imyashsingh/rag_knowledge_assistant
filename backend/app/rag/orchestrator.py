@@ -7,6 +7,7 @@ from app.rag.retriever import search_similar_chunks
 from app.rag.llm import generate_chat_response
 from app.core.redis_client import redis_client
 from app.schemas.chat import ChatResponse, SourceDocument
+from app.db.repositories.document_repo import DocumentRepository
 
 
 def run_rag_pipeline(
@@ -14,7 +15,8 @@ def run_rag_pipeline(
     workspace_id: int,
     user_id: int,
     max_sources: int = 5,
-    db: Session = None
+    db: Session = None,
+    conversation_history: list = None
 ) -> Optional[ChatResponse]:
     """
     Run complete RAG pipeline with caching
@@ -30,8 +32,22 @@ def run_rag_pipeline(
         ChatResponse with answer and sources, or None if error
     """
     try:
-        # Check cache first
-        cache_key = f"rag:{hashlib.md5(f'{query}:{workspace_id}'.encode()).hexdigest()}"
+        # Get workspace document count for cache versioning
+        db_session = db or SessionLocal()
+        should_close_db = db is None
+
+        try:
+            doc_repo = DocumentRepository(db_session)
+            doc_count = len(doc_repo.get_by_workspace(workspace_id))
+        finally:
+            if should_close_db:
+                db_session.close()
+
+        # Track query frequency for smart caching
+        track_query_frequency(workspace_id, query)
+
+        # Check cache first with workspace versioning
+        cache_key = f"rag:{workspace_id}:{doc_count}:{hashlib.md5(query.encode()).hexdigest()}"
         cached_response = redis_client.get(cache_key)
         if cached_response:
             cached_data = json.loads(cached_response)
@@ -75,7 +91,8 @@ def run_rag_pipeline(
                 ))
 
             # Generate response
-            answer = generate_chat_response(query, context_chunks)
+            answer = generate_chat_response(
+                query, context_chunks, conversation_history)
 
             if not answer:
                 return ChatResponse(
@@ -90,8 +107,14 @@ def run_rag_pipeline(
                 query=query
             )
 
-            # Cache response for 5 minutes
-            redis_client.set(cache_key, response.model_dump_json(), ex=300)
+            # Cache response for 5 minutes with size limit check
+            cache_size = get_workspace_cache_size(workspace_id)
+            query_freq = get_query_frequency(workspace_id, query)
+
+            # Only cache frequently asked questions (frequency > 1) or if under size limit
+            if cache_size < 1000 or query_freq > 1:
+                redis_client.set(cache_key, response.model_dump_json(), ex=300)
+                increment_workspace_cache_count(workspace_id)
 
             return response
 
@@ -102,8 +125,10 @@ def run_rag_pipeline(
 
     except Exception as e:
         print(f"Error in RAG pipeline: {str(e)}")
+        # Include error details in the response for debugging
+        error_message = f"I encountered an error while processing your question: {str(e)}. Please try again."
         return ChatResponse(
-            answer="I encountered an error while processing your question. Please try again.",
+            answer=error_message,
             sources=[],
             query=query
         )
@@ -127,8 +152,10 @@ def clear_rag_cache(workspace_id: Optional[int] = None) -> bool:
     """Clear RAG cache for workspace or all"""
     try:
         if workspace_id:
-            # Clear specific workspace cache (implementation depends on your Redis key strategy)
-            pattern = f"rag:*{workspace_id}*"
+            # Clear specific workspace cache
+            pattern = f"rag:{workspace_id}:*"
+            # Reset workspace cache count
+            redis_client.delete(f"cache_count:workspace:{workspace_id}")
         else:
             # Clear all RAG cache
             pattern = "rag:*"
@@ -140,3 +167,44 @@ def clear_rag_cache(workspace_id: Optional[int] = None) -> bool:
     except Exception as e:
         print(f"Error clearing RAG cache: {str(e)}")
         return False
+
+
+def get_workspace_cache_size(workspace_id: int) -> int:
+    """Get current cache size for workspace"""
+    try:
+        count = redis_client.get(f"cache_count:workspace:{workspace_id}")
+        return int(count) if count else 0
+    except:
+        return 0
+
+
+def increment_workspace_cache_count(workspace_id: int):
+    """Increment workspace cache count"""
+    try:
+        redis_client.incr(f"cache_count:workspace:{workspace_id}")
+        redis_client.expire(
+            f"cache_count:workspace:{workspace_id}", 86400)  # 24 hours
+    except:
+        pass
+
+
+def track_query_frequency(workspace_id: int, query: str):
+    """Track how often queries are asked"""
+    try:
+        query_hash = hashlib.md5(query.encode()).hexdigest()
+        key = f"query_freq:{workspace_id}:{query_hash}"
+        redis_client.incr(key)
+        redis_client.expire(key, 86400)  # Track for 24 hours
+    except:
+        pass
+
+
+def get_query_frequency(workspace_id: int, query: str) -> int:
+    """Get how many times a query was asked"""
+    try:
+        query_hash = hashlib.md5(query.encode()).hexdigest()
+        key = f"query_freq:{workspace_id}:{query_hash}"
+        freq = redis_client.get(key)
+        return int(freq) if freq else 0
+    except:
+        return 0

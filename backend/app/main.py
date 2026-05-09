@@ -42,7 +42,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Redis connection test failed: {str(e)}")
 
-    # Create database tables
+    # Setup pgvector extension and indexes FIRST
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.commit()
+        logger.info("pgvector extension installed successfully")
+    except Exception as e:
+        logger.error(f"pgvector extension installation failed: {str(e)}")
+        logger.error(
+            "Please ensure pgvector extension is installed in PostgreSQL:")
+        logger.error(
+            "  - For Ubuntu/Debian: sudo apt-get install postgresql-<version>-pgvector")
+        logger.error("  - For macOS: brew install pgvector")
+        logger.error(
+            "  - Or run: CREATE EXTENSION vector; in your database as superuser")
+        raise
+
+    # Create database tables AFTER pgvector extension
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
@@ -50,20 +67,20 @@ async def lifespan(app: FastAPI):
         logger.error(f"Database table creation failed: {str(e)}")
         raise
 
-    # Setup pgvector extension and indexes
+    # Setup vector indexes
     try:
         with engine.connect() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             conn.execute(text("""
                 CREATE INDEX IF NOT EXISTS idx_chunks_embedding
                 ON chunks USING ivfflat (embedding vector_cosine_ops)
                 WITH (lists = 100)
             """))
             conn.commit()
-        logger.info("pgvector extension and indexes setup complete")
+        logger.info("pgvector indexes setup complete")
     except Exception as e:
-        logger.error(f"pgvector setup failed: {str(e)}")
-        raise
+        logger.warning(f"Vector index creation failed: {str(e)}")
+        logger.warning(
+            "Application will continue without vector indexes (search may be slower)")
 
     logger.info("RAG Knowledge Assistant API startup complete")
 

@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rag-postgres
+    environment:
+      POSTGRES_DB: rag_knowledge_assistant
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    command: redis-server --requirepass rag_redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: rag-backend
+    environment:
+      - DB_URL=postgresql://rag_user:rag_password@postgres:5432/rag_knowledge_assistant
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=rag_redis_password
+      - APP_NAME=RAG Knowledge Assistant
+      - DEBUG=false
+      - ENVIRONMENT=development
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    container_name: rag-frontend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_APP_NAME=RAG Knowledge Assistant
+      - VITE_APP_VERSION=1.0.0
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

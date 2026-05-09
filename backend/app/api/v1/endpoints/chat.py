@@ -22,7 +22,11 @@ def chat_query(
         if not chat_request.query.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Query cannot be empty"
+                detail={
+                    "error": "EMPTY_QUERY",
+                    "message": "Query cannot be empty",
+                    "field": "query"
+                }
             )
 
         # Process chat query with history persistence
@@ -32,13 +36,18 @@ def chat_query(
             user_id=user_id,
             max_sources=chat_request.max_sources,
             db=db,
-            session_id=getattr(chat_request, 'session_id', None)
+            session_id=getattr(chat_request, 'session_id', None),
+            conversation_history=chat_request.conversation_history
         )
 
         if not response:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to process query"
+                detail={
+                    "error": "QUERY_PROCESSING_FAILED",
+                    "message": "Failed to process query",
+                    "details": "RAG pipeline returned no response"
+                }
             )
 
         return response
@@ -52,7 +61,7 @@ def chat_query(
         )
 
 
-@router.get("/history")
+@router.get("/history", response_model=list)
 def get_chat_history_endpoint(
     limit: int = 50,
     offset: int = 0,
@@ -61,22 +70,37 @@ def get_chat_history_endpoint(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """Get chat history for the current user"""
+    """Get chat history for the current user as a flat list"""
     try:
-        from app.services.chat_service import get_chat_history
-
-        history = get_chat_history(
-            workspace_id=workspace_id,
+        from app.db.repositories.chat_history_repo import ChatHistoryRepository
+        chat_repo = ChatHistoryRepository(db)
+        history = chat_repo.get_user_chat_history(
             user_id=user_id,
+            workspace_id=workspace_id,
             limit=limit,
-            offset=offset,
-            db=db
+            offset=offset
         )
-        return history
+        return [
+            {
+                "id": chat.id,
+                "query": chat.query,
+                "answer": chat.answer,
+                "sources": chat.sources or [],
+                "session_id": chat.session_id,
+                "created_at": chat.created_at.isoformat(),
+                "user_id": chat.user_id,
+                "workspace_id": chat.workspace_id,
+            }
+            for chat in history
+        ]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get chat history: {str(e)}"
+            detail={
+                "error": "CHAT_HISTORY_FAILED",
+                "message": "Failed to get chat history",
+                "details": str(e)
+            }
         )
 
 
@@ -94,7 +118,11 @@ def get_chat_workspace_stats(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get workspace statistics"
+            detail={
+                "error": "CHAT_STATS_FAILED",
+                "message": "Failed to get workspace statistics",
+                "details": str(e)
+            }
         )
 
 
@@ -118,7 +146,11 @@ def clear_chat_cache(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Cache clearing failed: {str(e)}"
+            detail={
+                "error": "CACHE_CLEAR_FAILED",
+                "message": "Failed to clear cache",
+                "details": str(e)
+            }
         )
 
 
@@ -146,4 +178,9 @@ def legacy_query(
         return response if response else {"error": "Failed to process query"}
 
     except Exception as e:
-        return {"error": f"Query processing failed: {str(e)}"}
+        return {
+            "error": "LEGACY_QUERY_FAILED",
+            "message": "Query processing failed",
+            "details": str(e),
+            "note": "Please use /query endpoint instead"
+        }

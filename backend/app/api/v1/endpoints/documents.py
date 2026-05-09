@@ -32,18 +32,30 @@ async def upload_document(
         if file_ext not in SUPPORTED_EXTENSIONS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type. Supported types: {', '.join(SUPPORTED_EXTENSIONS)}"
+                detail={
+                    "error": "UNSUPPORTED_FILE_TYPE",
+                    "message": f"Unsupported file type '{file_ext}'. Supported types: {', '.join(SUPPORTED_EXTENSIONS)}",
+                    "field": "file",
+                    "supported_types": SUPPORTED_EXTENSIONS
+                }
             )
 
         # Validate file size (10MB limit)
         file_size = 0
         content = await file.read()
         file_size = len(content)
+        max_size = 10 * 1024 * 1024  # 10MB
 
-        if file_size > 10 * 1024 * 1024:  # 10MB
+        if file_size > max_size:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File too large. Maximum size is 10MB"
+                detail={
+                    "error": "FILE_TOO_LARGE",
+                    "message": f"File too large. Maximum size is {max_size / (1024 * 1024)}MB",
+                    "field": "file",
+                    "current_size": file_size,
+                    "max_size": max_size
+                }
             )
 
         # Reset file pointer
@@ -55,8 +67,15 @@ async def upload_document(
             temp_file_path = temp_file.name
 
         try:
-            # Use title from request or filename
-            document_title = title or Path(file.filename).stem
+            # Use title from request or generate a user-friendly title from filename
+            if title:
+                document_title = title
+            else:
+                # Generate a more user-friendly title from filename
+                filename_stem = Path(file.filename).stem
+                # Remove file extension and common prefixes
+                document_title = filename_stem.replace(
+                    '_', ' ').replace('-', ' ').title()
 
             # Process document
             processor = DocumentProcessor()
@@ -69,7 +88,11 @@ async def upload_document(
             if not document_id:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to process document"
+                    detail={
+                        "error": "DOCUMENT_PROCESSING_FAILED",
+                        "message": "Failed to process document",
+                        "details": "Document processing service returned no document ID"
+                    }
                 )
 
             # Get document details
@@ -79,7 +102,11 @@ async def upload_document(
             if not document:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Document not found after processing"
+                    detail={
+                        "error": "DOCUMENT_NOT_FOUND",
+                        "message": "Document not found after processing",
+                        "details": "The document was processed but could not be retrieved from the database"
+                    }
                 )
 
             return DocumentResponse(
@@ -102,7 +129,11 @@ async def upload_document(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Document upload failed: {str(e)}"
+            detail={
+                "error": "DOCUMENT_UPLOAD_FAILED",
+                "message": "Document upload failed",
+                "details": str(e)
+            }
         )
 
 
@@ -137,7 +168,11 @@ def list_documents(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list documents"
+            detail={
+                "error": "DOCUMENT_LIST_FAILED",
+                "message": "Failed to list documents",
+                "details": str(e)
+            }
         )
 
 
@@ -173,7 +208,11 @@ def get_document(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get document"
+            detail={
+                "error": "DOCUMENT_RETRIEVAL_FAILED",
+                "message": "Failed to get document",
+                "details": str(e)
+            }
         )
 
 
@@ -189,10 +228,23 @@ def delete_document(
 
         # Check if document exists and belongs to workspace
         document = doc_repo.get_by_id(document_id)
-        if not document or document.workspace_id != workspace_id:
+        if not document:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
+                detail={
+                    "error": "DOCUMENT_NOT_FOUND",
+                    "message": f"Document with ID {document_id} not found",
+                    "field": "document_id"
+                }
+            )
+        elif document.workspace_id != workspace_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "DOCUMENT_ACCESS_DENIED",
+                    "message": "You don't have permission to access this document",
+                    "field": "workspace_id"
+                }
             )
 
         # Delete document (chunks will be deleted via cascade)
@@ -203,7 +255,11 @@ def delete_document(
         else:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete document"
+                detail={
+                    "error": "DOCUMENT_DELETE_FAILED",
+                    "message": "Failed to delete document",
+                    "details": "Database operation failed"
+                }
             )
 
     except HTTPException:

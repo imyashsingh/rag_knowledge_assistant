@@ -27,7 +27,17 @@ def process_document_upload(
     try:
         processor = DocumentProcessor(
             use_semantic_chunking=use_semantic_chunking)
-        return processor.process_document(file_path, title, workspace_id)
+
+        # Process document
+        document_id = processor.process_document(
+            file_path, title, workspace_id)
+
+        # Clear workspace cache to invalidate stale answers
+        if document_id:
+            from app.rag.orchestrator import clear_rag_cache
+            clear_rag_cache(workspace_id)
+
+        return document_id
     except Exception as e:
         raise DocumentProcessingException(
             f"Document processing failed: {str(e)}")
@@ -99,7 +109,15 @@ def delete_document_service(document_id: int, workspace_id: int, db: Session) ->
         if not document or document.workspace_id != workspace_id:
             return False
 
-        return doc_repo.delete(document_id)
+        # Delete document
+        success = doc_repo.delete(document_id)
+
+        # Clear workspace cache to invalidate stale answers
+        if success:
+            from app.rag.orchestrator import clear_rag_cache
+            clear_rag_cache(workspace_id)
+
+        return success
     except Exception as e:
         raise DocumentProcessingException(
             f"Failed to delete document: {str(e)}")

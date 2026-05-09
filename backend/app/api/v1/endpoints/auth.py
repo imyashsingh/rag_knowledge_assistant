@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
-from app.services.auth_service import register_user, login_user, refresh_token, logout_user
+from app.services.auth_service import register_user, login_user, refresh_token
 from app.schemas.user import UserCreate, UserLogin, UserResponse
 from app.schemas.auth import TokenResponse, RefreshTokenRequest
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_id
 from app.db.repositories.user_repo import UserRepository
+from app.db.repositories.workspace_repo import WorkspaceRepository
 from app.db.session import get_db
 
 router = APIRouter()
@@ -19,14 +20,50 @@ def register(
     try:
         return register_user(user_data, db)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        error_message = str(e)
+        if "already exists" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "USER_EXISTS",
+                    "message": error_message,
+                    "field": "email"
+                }
+            )
+        elif "invalid email" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "INVALID_EMAIL",
+                    "message": error_message,
+                    "field": "email"
+                }
+            )
+        elif "password" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "INVALID_PASSWORD",
+                    "message": error_message,
+                    "field": "password"
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "VALIDATION_ERROR",
+                    "message": error_message
+                }
+            )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed. Please try again."
+            detail={
+                "error": "REGISTRATION_FAILED",
+                "message": "Registration failed. Please try again.",
+                "details": str(e) if str(e) != "Registration failed: " else None
+            }
         )
 
 
@@ -39,14 +76,50 @@ def login(
     try:
         return login_user(user_data, db)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
-        )
+        error_message = str(e)
+        if "no account found" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "USER_NOT_FOUND",
+                    "message": error_message,
+                    "field": "email"
+                }
+            )
+        elif "incorrect password" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "INVALID_CREDENTIALS",
+                    "message": error_message,
+                    "field": "password"
+                }
+            )
+        elif "invalid email" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "INVALID_EMAIL",
+                    "message": error_message,
+                    "field": "email"
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "LOGIN_FAILED",
+                    "message": error_message
+                }
+            )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login failed. Please try again."
+            detail={
+                "error": "LOGIN_FAILED",
+                "message": "Login failed. Please try again.",
+                "details": str(e) if str(e) != "Login failed: " else None
+            }
         )
 
 
@@ -67,27 +140,6 @@ def refresh_token_endpoint(token_data: RefreshTokenRequest):
         )
 
 
-@router.post("/logout")
-def logout(current_user: dict = Depends(get_current_user)):
-    """Logout user and invalidate refresh token"""
-    try:
-        user_id = current_user.get("user_id")
-        success = logout_user(user_id)
-
-        if success:
-            return {"message": "Successfully logged out"}
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Logout failed"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Logout failed"
-        )
-
-
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(
     current_user: dict = Depends(get_current_user),
@@ -102,7 +154,11 @@ def get_current_user_info(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                detail={
+                    "error": "USER_NOT_FOUND",
+                    "message": "User not found",
+                    "field": "user_id"
+                }
             )
 
         return UserResponse(
@@ -117,5 +173,76 @@ def get_current_user_info(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get user information"
+            detail={
+                "error": "USER_INFO_FAILED",
+                "message": "Failed to get user info",
+                "details": str(e)
+            }
+        )
+
+
+@router.post("/switch-workspace")
+def switch_workspace(
+    workspace_data: dict,
+    current_user: dict = Depends(get_current_user),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Switch user to a different workspace"""
+    try:
+        user_repo = UserRepository(db)
+        workspace_repo = WorkspaceRepository(db)
+
+        # Extract workspace_id from request body
+        workspace_id = workspace_data.get('workspace_id')
+        if not workspace_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "MISSING_WORKSPACE_ID",
+                    "message": "workspace_id is required in request body",
+                    "field": "workspace_id"
+                }
+            )
+
+        # Verify workspace exists and user has access
+        workspace = workspace_repo.get_by_id(workspace_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "WORKSPACE_NOT_FOUND",
+                    "message": f"Workspace with ID {workspace_id} not found",
+                    "field": "workspace_id"
+                }
+            )
+
+        # Update user's current workspace
+        user_repo.update(user_id, workspace_id=workspace_id)
+
+        # Generate new tokens with updated workspace_id
+        from app.core.security import create_access_token, create_refresh_token
+        access_token = create_access_token(
+            {"user_id": user_id, "workspace_id": workspace_id})
+        refresh_token = create_refresh_token(
+            {"user_id": user_id, "workspace_id": workspace_id})
+
+        return {
+            "message": f"Successfully switched to workspace '{workspace.name}'",
+            "workspace_id": workspace_id,
+            "workspace_name": workspace.name,
+            "access_token": access_token,
+            "refresh_token": refresh_token
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "WORKSPACE_SWITCH_FAILED",
+                "message": "Failed to switch workspace",
+                "details": str(e)
+            }
         )

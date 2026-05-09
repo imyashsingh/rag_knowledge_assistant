@@ -8,7 +8,7 @@ from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from app.core.redis_client import RedisCache
+from app.core.redis_client import RedisCache, redis_client
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.default_limit = default_limit
         self.default_window = default_window
-        self.redis_cache = redis_cache or RedisCache
+        self.redis_cache = redis_cache or RedisCache()
 
         # Rate limit configurations for different endpoints
         self.endpoint_configs = {
@@ -162,7 +162,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         try:
             # Get current request count and timestamps
-            pipe = self.redis_cache.redis_client.pipeline()
+            pipe = redis_client.pipeline()
             pipe.zremrangebyscore(key, 0, window_start)  # Remove old entries
             pipe.zcard(key)  # Count current entries
             pipe.zrange(key, 0, 0)  # Get oldest timestamp
@@ -182,9 +182,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 return False, 0, reset_time
 
             # Add current request
-            self.redis_cache.redis_client.zadd(
+            redis_client.zadd(
                 key, {str(current_time): current_time})
-            self.redis_cache.redis_client.expire(key, window)
+            redis_client.expire(key, window)
 
             remaining = limit - (current_count + 1)
             reset_time = current_time + window
@@ -201,7 +201,7 @@ class RateLimiter:
     """Utility class for manual rate limiting"""
 
     def __init__(self, redis_cache: Optional[RedisCache] = None):
-        self.redis_cache = redis_cache or RedisCache
+        self.redis_cache = redis_cache or RedisCache()
 
     def is_rate_limited(
         self,
@@ -226,7 +226,7 @@ class RateLimiter:
         key = f"rate_limit:custom:{identifier}"
 
         try:
-            pipe = self.redis_cache.redis_client.pipeline()
+            pipe = redis_client.pipeline()
             pipe.zremrangebyscore(key, 0, window_start)
             pipe.zcard(key)
             pipe.zrange(key, 0, 0)
@@ -244,9 +244,9 @@ class RateLimiter:
                 return True, 0, reset_time
 
             # Add current request
-            self.redis_cache.redis_client.zadd(
+            redis_client.zadd(
                 key, {str(current_time): current_time})
-            self.redis_cache.redis_client.expire(key, window)
+            redis_client.expire(key, window)
 
             remaining = limit - (current_count + 1)
             reset_time = current_time + window
@@ -271,7 +271,7 @@ class RateLimiter:
         """Get rate limit information for identifier"""
         try:
             key = f"rate_limit:custom:{identifier}"
-            pipe = self.redis_cache.redis_client.pipeline()
+            pipe = redis_client.pipeline()
             pipe.zcard(key)
             pipe.ttl(key)
             results = pipe.execute()
