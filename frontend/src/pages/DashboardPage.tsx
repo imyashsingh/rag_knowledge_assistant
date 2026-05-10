@@ -130,9 +130,9 @@ const DashboardPage: React.FC = () => {
                     <MessageSquare className="h-8 w-8 text-green-600" />
                     <div className="ml-4">
                       <p className="text-2xl font-bold text-gray-900">
-                        {workspaceStats.chat_count}
+                        {workspaceStats.session_count}
                       </p>
-                      <p className="text-sm text-gray-600">Chats</p>
+                      <p className="text-sm text-gray-600">Chat Sessions</p>
                     </div>
                   </div>
                 </CardContent>

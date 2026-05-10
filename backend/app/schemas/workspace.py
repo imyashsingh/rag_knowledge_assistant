@@ -36,4 +36,5 @@ class WorkspaceStats(BaseModel):
     document_count: int
     user_count: int
     chat_count: int
+    session_count: int
     created_at: datetime

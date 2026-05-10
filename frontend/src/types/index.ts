@@ -62,6 +62,7 @@ export interface WorkspaceStats {
   document_count: number
   user_count: number
   chat_count: number
+  session_count: number
   created_at: string
 }
 
@@ -118,6 +119,7 @@ export interface ChatMessage {
   created_at: string
   user_id: number
   workspace_id: number
+  session_id?: string
 }
 
 export interface ConversationHistoryMessage {

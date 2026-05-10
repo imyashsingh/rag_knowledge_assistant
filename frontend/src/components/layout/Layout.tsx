@@ -143,8 +143,8 @@ const Layout: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-64">
-        <div className="min-h-screen">
+      <div className="flex-1 h-screen overflow-hidden">
+        <div className="h-full">
           <Outlet />
         </div>
       </div>

@@ -341,6 +341,7 @@ def get_workspace_statistics(
         user_count = len(user_repo.get_workspace_users(workspace_id))
         chat_stats = chat_repo.get_chat_statistics(workspace_id)
         chat_count = chat_stats.get("total_chats", 0)
+        session_count = chat_stats.get("session_count", 0)
 
         return WorkspaceStats(
             id=workspace.id,
@@ -348,6 +349,7 @@ def get_workspace_statistics(
             document_count=document_count,
             user_count=user_count,
             chat_count=chat_count,
+            session_count=session_count,
             created_at=workspace.created_at
         )
 

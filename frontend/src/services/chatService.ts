@@ -50,6 +50,42 @@ export const chatService = {
     return response.data
   },
 
+  // Get chat sessions
+  getSessions: async (): Promise<any[]> => {
+    const response = await api.get('/api/v1/chat/sessions')
+    return response.data as any[]
+  },
+
+  // Search chat history
+  search: async (query: string, sessionId?: string): Promise<any[]> => {
+    const params: any = { q: query }
+    if (sessionId) {
+      params.session_id = sessionId
+    }
+    const response = await api.get('/api/v1/chat/search', { params })
+    return response.data as any[]
+  },
+
+  // Delete session
+  deleteSession: async (sessionId: string): Promise<void> => {
+    await api.delete(`/api/v1/chat/sessions/${sessionId}`)
+  },
+
+  // Update session name
+  updateSessionName: async (sessionId: string, name: string): Promise<any> => {
+    const response = await api.patch(`/api/v1/chat/sessions/${sessionId}`, { name })
+    return response.data
+  },
+
+  // Create session
+  createSession: async (sessionId: string, name?: string): Promise<any> => {
+    const response = await api.post('/api/v1/chat/sessions', {
+      session_id: sessionId,
+      name: name
+    })
+    return response.data
+  },
+
   // Legacy query endpoint (for backward compatibility)
   legacyQuery: async (query: string, workspace: string): Promise<any> => {
     const response = await api.post(

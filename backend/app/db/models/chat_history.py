@@ -14,6 +14,7 @@ class ChatHistory(Base):
     answer = Column(Text, nullable=False)
     sources = Column(JSON, nullable=True)  # Store sources as JSON
     session_id = Column(String, nullable=True)  # Optional session grouping
+    name = Column(String, nullable=True)  # Session name for display purposes
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

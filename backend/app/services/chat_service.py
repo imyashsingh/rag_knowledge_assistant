@@ -53,7 +53,8 @@ def handle_chat_query(
                     answer=response.answer,
                     sources=[source.model_dump()
                              for source in response.sources],
-                    session_id=session_id
+                    session_id=session_id,
+                    name=None  # Name is set during session creation, not individual messages
                 )
             except Exception as db_error:
                 # Rollback any failed transaction and continue without saving history

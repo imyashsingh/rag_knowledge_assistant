@@ -17,6 +17,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     query: str
     max_sources: Optional[int] = 5
+    session_id: Optional[str] = None
     conversation_history: Optional[List[ChatMessage]] = None
 
 

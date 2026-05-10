@@ -16,7 +16,8 @@ class ChatHistoryRepository(BaseRepository[ChatHistory]):
         query: str,
         answer: str,
         sources: dict = None,
-        session_id: str = None
+        session_id: str = None,
+        name: str = None
     ) -> ChatHistory:
         return self.create(
             user_id=user_id,
@@ -24,7 +25,8 @@ class ChatHistoryRepository(BaseRepository[ChatHistory]):
             query=query,
             answer=answer,
             sources=sources,
-            session_id=session_id
+            session_id=session_id,
+            name=name
         )
 
     def get_user_chat_history(
@@ -110,14 +112,20 @@ class ChatHistoryRepository(BaseRepository[ChatHistory]):
         query = self.db_session.query(ChatHistory).filter(
             ChatHistory.workspace_id == workspace_id
         )
-        
+
         if user_id:
             query = query.filter(ChatHistory.user_id == user_id)
-        
+
         total_chats = query.count()
-        
+
+        # Count unique sessions
+        session_count = query.filter(ChatHistory.session_id.isnot(None)).distinct(
+            ChatHistory.session_id
+        ).count()
+
         return {
             "total_chats": total_chats,
+            "session_count": session_count,
             "workspace_id": workspace_id,
             "user_id": user_id
         }
