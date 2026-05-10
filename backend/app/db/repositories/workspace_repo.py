@@ -13,8 +13,16 @@ class WorkspaceRepository(BaseRepository[Workspace]):
     def get_by_name(self, name: str) -> Optional[Workspace]:
         return self.get_by_field("name", name)
 
-    def create_workspace(self, name: str) -> Workspace:
-        return self.create(name=name)
+    def get_by_owner(self, owner_id: int) -> List[Workspace]:
+        """Get all workspaces owned by a specific user"""
+        return (
+            self.db_session.query(Workspace)
+            .filter(Workspace.owner_id == owner_id)
+            .all()
+        )
+
+    def create_workspace(self, name: str, owner_id: int) -> Workspace:
+        return self.create(name=name, owner_id=owner_id)
 
     def get_all(self) -> List[Workspace]:
         """Get all workspaces"""

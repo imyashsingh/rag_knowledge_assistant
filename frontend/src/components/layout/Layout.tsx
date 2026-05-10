@@ -13,11 +13,28 @@ import {
   Users
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { workspaceService } from '@/services/workspaceService'
+import { Workspace } from '@/types'
 
 const Layout: React.FC = () => {
   const { user, logout } = useAuthStore()
   const { sidebarOpen, toggleSidebar, mobileMenuOpen, toggleMobileMenu } = useUIStore()
   const navigate = useNavigate()
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+
+  useEffect(() => {
+    const fetchWorkspaces = async () => {
+      try {
+        const workspaceList = await workspaceService.list()
+        setWorkspaces(workspaceList)
+      } catch (error) {
+        console.error('Failed to fetch workspaces:', error)
+      }
+    }
+
+    fetchWorkspaces()
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -81,7 +98,7 @@ const Layout: React.FC = () => {
                   {user?.email}
                 </p>
                 <p className="text-xs text-gray-500">
-                  Workspace: {user?.workspace_id}
+                  Workspace: {workspaces.find(w => w.id === user?.workspace_id)?.name || `ID: ${user?.workspace_id}`}
                 </p>
               </div>
             </div>

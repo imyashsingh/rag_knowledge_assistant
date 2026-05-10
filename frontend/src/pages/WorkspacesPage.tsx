@@ -7,7 +7,7 @@ import { Workspace, WorkspaceCreate, User } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Building, Plus, Edit, Trash2, Users, FileText, MessageSquare, Check } from 'lucide-react'
+import { Building, FolderPlus, Edit, Trash2, Users, FileText, MessageSquare, Check } from 'lucide-react'
 import { formatRelativeTime } from '@/utils/helpers'
 
 const WorkspacesPage: React.FC = () => {
@@ -135,12 +135,12 @@ const WorkspacesPage: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Workspaces</h1>
             <p className="text-gray-600 mt-2">
-              Manage your workspaces and collaboration spaces
+              Organize your personal workspaces for different projects and topics
             </p>
           </div>
           
           <Button onClick={() => setShowCreateForm(true)}>
-            <Plus className="h-4 w-4 mr-2" />
+            <FolderPlus className="h-4 w-4 mr-2" />
             Create Workspace
           </Button>
         </div>
@@ -186,9 +186,9 @@ const WorkspacesPage: React.FC = () => {
                     <Users className="h-8 w-8 text-purple-600" />
                     <div className="ml-4">
                       <p className="text-2xl font-bold text-gray-900">
-                        {currentStats.user_count}
+                        1
                       </p>
-                      <p className="text-sm text-gray-600">Users</p>
+                      <p className="text-sm text-gray-600">Owner</p>
                     </div>
                   </div>
                 </CardContent>
@@ -267,9 +267,9 @@ const WorkspacesPage: React.FC = () => {
                 <CardContent>
                   <div className="text-sm text-gray-600">
                     {workspace.id === user?.workspace_id ? (
-                      <span className="text-green-600 font-medium">Current workspace</span>
+                      <span className="text-green-600 font-medium">Currently active</span>
                     ) : (
-                      <span>Switch to this workspace to manage its settings</span>
+                      <span>Switch to this workspace to work here</span>
                     )}
                   </div>
                 </CardContent>
@@ -285,7 +285,7 @@ const WorkspacesPage: React.FC = () => {
                 Create your first workspace to get started
               </p>
               <Button onClick={() => setShowCreateForm(true)}>
-                <Plus className="h-4 w-4 mr-2" />
+                <FolderPlus className="h-4 w-4 mr-2" />
                 Create First Workspace
               </Button>
             </div>

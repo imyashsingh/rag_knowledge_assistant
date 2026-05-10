@@ -3,6 +3,7 @@ export interface User {
   id: number
   email: string
   workspace_id: number
+  workspace_name?: string
   created_at: string
 }
 

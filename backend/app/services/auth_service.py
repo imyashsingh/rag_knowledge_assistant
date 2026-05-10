@@ -24,29 +24,28 @@ def register_user(user_data: UserCreate, db: Session) -> TokenResponse:
         workspace_repo = WorkspaceRepository(db)
         user_repo = UserRepository(db)
 
-        # Normalize workspace name - fall back to "Default Workspace" if blank
-        workspace_name = (
-            user_data.workspace_name or "").strip() or "Default Workspace"
-
-        # Create workspace if it doesn't exist
-        workspace = workspace_repo.get_by_name(workspace_name)
-        if not workspace:
-            workspace = workspace_repo.create_workspace(workspace_name)
-
-        # Check if user already exists in this workspace
-        existing_user = user_repo.get_by_email_and_workspace(
-            user_data.email, workspace.id)
+        # Check if user already exists
+        existing_user = user_repo.get_by_email(user_data.email)
         if existing_user:
             raise ValueError(
-                f"User with email '{user_data.email}' already exists in workspace '{user_data.workspace_name}'")
+                f"User with email '{user_data.email}' already exists")
 
-        # Create user
+        # Create user first
         user = user_repo.create_user(
             email=user_data.email,
             name=user_data.name,
             password=hash_password(user_data.password),
-            workspace_id=workspace.id
+            workspace_id=None  # Will be set after workspace creation
         )
+
+        # Create default workspace owned by the user
+        workspace = workspace_repo.create_workspace(
+            name="My Workspace",
+            owner_id=user.id
+        )
+
+        # Update user's workspace_id
+        user_repo.update(user.id, workspace_id=workspace.id)
 
         # Generate tokens
         access_token = create_access_token(

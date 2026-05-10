@@ -7,7 +7,7 @@ import { workspaceService } from '@/services/workspaceService'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatRelativeTime } from '@/utils/helpers'
-import { FileText, MessageSquare, Users, Plus } from 'lucide-react'
+import { FileText, MessageSquare, FolderPlus } from 'lucide-react'
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuthStore()
@@ -35,23 +35,23 @@ const DashboardPage: React.FC = () => {
 
   const quickActions = [
     {
-      title: 'New Chat',
-      description: 'Start a conversation with your knowledge base',
+      title: 'Start Chat',
+      description: 'Chat with your AI assistant in this workspace',
       icon: MessageSquare,
       href: '/chat',
       color: 'bg-blue-500',
     },
     {
       title: 'Upload Document',
-      description: 'Add new documents to your knowledge base',
+      description: 'Add documents to this workspace knowledge base',
       icon: FileText,
       href: '/documents',
       color: 'bg-green-500',
     },
     {
-      title: 'Manage Workspace',
-      description: 'Configure workspace settings and users',
-      icon: Users,
+      title: 'Manage Workspaces',
+      description: 'Organize your personal workspaces and projects',
+      icon: FolderPlus,
       href: '/workspaces',
       color: 'bg-purple-500',
     },
@@ -109,7 +109,7 @@ const DashboardPage: React.FC = () => {
         {workspaceStats && (
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Workspace Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center">
@@ -141,21 +141,7 @@ const DashboardPage: React.FC = () => {
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center">
-                    <Users className="h-8 w-8 text-purple-600" />
-                    <div className="ml-4">
-                      <p className="text-2xl font-bold text-gray-900">
-                        {workspaceStats.user_count}
-                      </p>
-                      <p className="text-sm text-gray-600">Users</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center">
-                    <Plus className="h-8 w-8 text-orange-600" />
+                    <FolderPlus className="h-8 w-8 text-orange-600" />
                     <div className="ml-4">
                       <p className="text-2xl font-bold text-gray-900">
                         {workspaceStats.name}

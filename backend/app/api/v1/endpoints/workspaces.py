@@ -18,24 +18,26 @@ def create_workspace(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """Create a new workspace"""
+    """Create a new workspace owned by the current user"""
     try:
         workspace_repo = WorkspaceRepository(db)
 
-        # Check if workspace name already exists
-        existing_workspace = workspace_repo.get_by_name(workspace_data.name)
-        if existing_workspace:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "error": "WORKSPACE_EXISTS",
-                    "message": f"Workspace with name '{workspace_data.name}' already exists",
-                    "field": "name"
-                }
-            )
+        # Check if workspace name already exists for this user
+        user_workspaces = workspace_repo.get_by_owner(user_id)
+        for ws in user_workspaces:
+            if ws.name == workspace_data.name:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "WORKSPACE_EXISTS",
+                        "message": f"Workspace with name '{workspace_data.name}' already exists",
+                        "field": "name"
+                    }
+                )
 
-        # Create workspace
-        workspace = workspace_repo.create_workspace(workspace_data.name)
+        # Create workspace owned by the user
+        workspace = workspace_repo.create_workspace(
+            workspace_data.name, owner_id=user_id)
 
         return WorkspaceResponse(
             id=workspace.id,
@@ -62,7 +64,7 @@ def list_user_workspaces(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """List all workspaces (so users can switch between them)"""
+    """List all workspaces owned by the current user"""
     try:
         workspace_repo = WorkspaceRepository(db)
         user_repo = UserRepository(db)
@@ -79,12 +81,13 @@ def list_user_workspaces(
                 }
             )
 
-        # Return ALL workspaces so users can see and switch to any of them
-        all_workspaces = workspace_repo.get_multi()
+        # Return only workspaces owned by the user
+        user_workspaces = workspace_repo.get_by_owner(user_id)
 
-        if not all_workspaces:
-            # If no workspaces exist, create a default one for the user
-            default_workspace = workspace_repo.create_workspace("My Workspace")
+        if not user_workspaces:
+            # If user has no workspaces, create a default one
+            default_workspace = workspace_repo.create_workspace(
+                "My Workspace", owner_id=user_id)
             user_repo.update(user.id, workspace_id=default_workspace.id)
             return [WorkspaceResponse(
                 id=default_workspace.id,
@@ -92,14 +95,14 @@ def list_user_workspaces(
                 created_at=default_workspace.created_at
             )]
 
-        # One-time fix: handle workspaces with empty names
+        # Return user's workspaces
         return [
             WorkspaceResponse(
                 id=ws.id,
                 name=ws.name if ws.name and ws.name.strip() else "Default Workspace",
                 created_at=ws.created_at
             )
-            for ws in all_workspaces
+            for ws in user_workspaces
         ]
 
     except HTTPException:
@@ -119,25 +122,25 @@ def list_user_workspaces(
 def get_workspace(
     workspace_id: int,
     current_user: dict = Depends(get_current_user),
-    user_workspace_id: int = Depends(get_current_workspace_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Get workspace details with users"""
     try:
-        # Ensure user can only access their own workspace
-        if workspace_id != user_workspace_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this workspace"
-            )
-
         workspace_repo = WorkspaceRepository(db)
-        workspace = workspace_repo.get_with_users(workspace_id)
+        workspace = workspace_repo.get_by_id(workspace_id)
 
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Workspace not found"
+            )
+
+        # Ensure user owns the workspace
+        if workspace.owner_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this workspace"
             )
 
         # Get user information
@@ -173,13 +176,22 @@ def update_workspace(
     workspace_id: int,
     workspace_data: WorkspaceUpdate,
     current_user: dict = Depends(get_current_user),
-    user_workspace_id: int = Depends(get_current_workspace_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Update workspace details"""
     try:
-        # Ensure user can only update their own workspace
-        if workspace_id != user_workspace_id:
+        workspace_repo = WorkspaceRepository(db)
+        workspace = workspace_repo.get_by_id(workspace_id)
+
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found"
+            )
+
+        # Ensure user owns the workspace
+        if workspace.owner_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
@@ -189,35 +201,28 @@ def update_workspace(
                 }
             )
 
-        workspace_repo = WorkspaceRepository(db)
-
         if not workspace_data.name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Name is required for update"
             )
 
-        # Check if new name conflicts with existing workspace
-        existing_workspace = workspace_repo.get_by_name(workspace_data.name)
-        if existing_workspace and existing_workspace.id != workspace_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "error": "WORKSPACE_NAME_CONFLICT",
-                    "message": f"Workspace with name '{workspace_data.name}' already exists",
-                    "field": "name",
-                    "existing_workspace_id": existing_workspace.id
-                }
-            )
+        # Check if new name conflicts with existing workspace for this user
+        user_workspaces = workspace_repo.get_by_owner(user_id)
+        for ws in user_workspaces:
+            if ws.name == workspace_data.name and ws.id != workspace_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "WORKSPACE_NAME_CONFLICT",
+                        "message": f"Workspace with name '{workspace_data.name}' already exists",
+                        "field": "name",
+                        "existing_workspace_id": ws.id
+                    }
+                )
 
         workspace = workspace_repo.update(
             workspace_id, name=workspace_data.name)
-
-        if not workspace:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found"
-            )
 
         return WorkspaceResponse(
             id=workspace.id,
@@ -242,13 +247,36 @@ def update_workspace(
 def delete_workspace(
     workspace_id: int,
     current_user: dict = Depends(get_current_user),
-    user_workspace_id: int = Depends(get_current_workspace_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Delete a workspace (cascade deletes documents, chunks, and chat history)"""
     try:
+        workspace_repo = WorkspaceRepository(db)
+        user_repo = UserRepository(db)
+
+        # Check if workspace exists
+        workspace = workspace_repo.get_by_id(workspace_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found"
+            )
+
+        # Ensure user owns the workspace
+        if workspace.owner_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "WORKSPACE_ACCESS_DENIED",
+                    "message": "You don't have permission to delete this workspace",
+                    "field": "workspace_id"
+                }
+            )
+
         # Prevent deletion of current workspace
-        if workspace_id == user_workspace_id:
+        user = user_repo.get_by_id(user_id)
+        if user.workspace_id == workspace_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -257,16 +285,6 @@ def delete_workspace(
                     "field": "workspace_id",
                     "suggestion": "Switch to another workspace before deleting this one"
                 }
-            )
-
-        workspace_repo = WorkspaceRepository(db)
-
-        # Check if workspace exists
-        workspace = workspace_repo.get_by_id(workspace_id)
-        if not workspace:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found"
             )
 
         # Delete workspace (cascade will handle related data)
@@ -293,30 +311,30 @@ def delete_workspace(
 def get_workspace_statistics(
     workspace_id: int,
     current_user: dict = Depends(get_current_user),
-    user_workspace_id: int = Depends(get_current_workspace_id),
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Get comprehensive workspace statistics"""
     try:
-        # Ensure user can only access their own workspace stats
-        if workspace_id != user_workspace_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this workspace"
-            )
-
         workspace_repo = WorkspaceRepository(db)
-        doc_repo = DocumentRepository(db)
-        user_repo = UserRepository(db)
-        chat_repo = ChatHistoryRepository(db)
-
-        # Get workspace
         workspace = workspace_repo.get_by_id(workspace_id)
+
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Workspace not found"
             )
+
+        # Ensure user owns the workspace
+        if workspace.owner_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this workspace"
+            )
+
+        doc_repo = DocumentRepository(db)
+        user_repo = UserRepository(db)
+        chat_repo = ChatHistoryRepository(db)
 
         # Get statistics
         document_count = len(doc_repo.get_workspace_documents(workspace_id))

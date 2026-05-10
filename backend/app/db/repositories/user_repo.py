@@ -12,7 +12,7 @@ class UserRepository(BaseRepository[User]):
     def get_by_email(self, email: str) -> Optional[User]:
         return self.get_by_field("email", email)
 
-    def create_user(self, email: str, password: str, workspace_id: int, name: str) -> User:
+    def create_user(self, email: str, password: str, workspace_id: Optional[int], name: str) -> User:
         return self.create(email=email, password=password, workspace_id=workspace_id, name=name)
 
     def get_workspace_users(self, workspace_id: int) -> List[User]:

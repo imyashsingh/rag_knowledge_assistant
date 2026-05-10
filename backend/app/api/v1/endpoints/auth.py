@@ -205,7 +205,7 @@ def switch_workspace(
                 }
             )
 
-        # Verify workspace exists and user has access
+        # Verify workspace exists and user owns it
         workspace = workspace_repo.get_by_id(workspace_id)
         if not workspace:
             raise HTTPException(
@@ -213,6 +213,17 @@ def switch_workspace(
                 detail={
                     "error": "WORKSPACE_NOT_FOUND",
                     "message": f"Workspace with ID {workspace_id} not found",
+                    "field": "workspace_id"
+                }
+            )
+
+        # Ensure user owns the workspace
+        if workspace.owner_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "WORKSPACE_ACCESS_DENIED",
+                    "message": "You don't have permission to access this workspace",
                     "field": "workspace_id"
                 }
             )

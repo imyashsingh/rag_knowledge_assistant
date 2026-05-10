@@ -10,9 +10,9 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=False)
     password = Column(String, nullable=False)
-    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    workspace = relationship("Workspace", back_populates="users")
+    workspace = relationship("Workspace", foreign_keys=[workspace_id])
     chat_history = relationship("ChatHistory", back_populates="user")
